@@ -1,0 +1,39 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/phpstan/phpstan/conf/bleedingEdge.neon
+
+parameters:
+    level: max
+    paths:
+        - src
+        - tests/Fixtures
+    # tests/Fixtures holds real Eloquent model classes (not Pest test files) so that
+    # traits like HasLtree have at least one concrete `use` site within the analysed
+    # paths — PHPStan only analyses a trait's body in the context of a class that
+    # uses it (https://phpstan.org/blog/how-phpstan-analyses-traits).
+    # LtreeBuilder<TModel> typing works via the newEloquentBuilder @return annotation — no extension needed.
+
+    # The literal-string ignore below only applies on Laravel 13 (Laravel 12's
+    # whereRaw/Expression are not literal-string typed), so on Laravel 12 it
+    # matches nothing — don't fail the analysis for that.
+    reportUnmatchedIgnoredErrors: false
+
+    ignoreErrors:
+        # THE ONE DOCUMENTED EXCEPTION to this package's level-max, baseline-free
+        # analysis. Laravel 13 types all raw SQL (whereRaw(), Expression, DB::raw())
+        # as `literal-string` to deter injection. This package's whole premise is a
+        # CONFIGURABLE column (config('ltree.path_column')), so its SQL is built from
+        # a runtime — but developer-controlled and double-quoted — identifier, with
+        # EVERY value bound via `?` placeholders. The SQL is injection-safe but, by
+        # construction, not a compile-time literal, and no non-suppression path can
+        # satisfy `literal-string` for a config-driven column name. This ignore is
+        # scoped to exactly that false positive (the literal-string argument.type on
+        # our own raw ltree SQL) and nothing else.
+        -
+            identifier: argument.type
+            message: '#expects .*literal-string, (non-falsy-string|string) given#'
+            paths:
+                - src/Builders/LtreeBuilder.php
+                - src/Concerns/HasLtree.php
+                - src/Relations/*.php
+                - src/Support/Ltree.php

@@ -1,0 +1,86 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4', '8.5']
+        laravel: ['12.*', '13.*']
+        stability: [prefer-lowest, prefer-stable]
+        postgres: ['18']
+        include:
+          - laravel: '12.*'
+            testbench: '10.*'
+          - laravel: '13.*'
+            testbench: '11.*'
+          # Sweep every supported PostgreSQL major on the newest PHP/Laravel.
+          - { php: '8.5', laravel: '13.*', testbench: '11.*', stability: prefer-stable, postgres: '16' }
+          - { php: '8.5', laravel: '13.*', testbench: '11.*', stability: prefer-stable, postgres: '17' }
+
+    name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - PG${{ matrix.postgres }}
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}-alpine
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: ltree_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ltree_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      LTREE_DB_HOST: 127.0.0.1
+      LTREE_DB_PORT: 5432
+      LTREE_DB_DATABASE: ltree_test
+      LTREE_DB_USERNAME: postgres
+      LTREE_DB_PASSWORD: secret
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ matrix.php }}-${{ matrix.laravel }}-${{ matrix.stability }}-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            composer-${{ matrix.php }}-${{ matrix.laravel }}-
+            composer-${{ matrix.php }}-
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_pgsql, pgsql, mbstring
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction --no-progress
+
+      - name: List installed dependencies
+        run: composer show -D
+
+      - name: Execute tests
+        run: vendor/bin/pest --ci

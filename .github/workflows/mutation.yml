@@ -1,0 +1,66 @@
+name: mutation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    name: Mutation (P8.4 - L13 - PG18)
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: ltree_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ltree_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      LTREE_DB_HOST: 127.0.0.1
+      LTREE_DB_PORT: 5432
+      LTREE_DB_DATABASE: ltree_test
+      LTREE_DB_USERNAME: postgres
+      LTREE_DB_PASSWORD: secret
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.composer/cache/files
+          key: composer-mutation-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            composer-mutation-
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pgsql, mbstring
+          coverage: pcov
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+
+      # Mutation testing is version-independent, so it runs once here and
+      # enforces a covered-mutation score of 100.
+      - name: Run mutation testing
+        run: composer mutate

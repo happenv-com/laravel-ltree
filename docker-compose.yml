@@ -1,0 +1,38 @@
+# Local PostgreSQL matrix for running the suite against every supported major
+# version. Each service exposes 5432 on a distinct host port; point the suite
+# at one with LTREE_DB_PORT (see tests/DatabaseTestCase.php):
+#
+#   docker compose up -d
+#   LTREE_DB_PORT=55416 vendor/bin/pest   # PG 16
+#   LTREE_DB_PORT=55417 vendor/bin/pest   # PG 17
+#   LTREE_DB_PORT=55418 vendor/bin/pest   # PG 18
+#
+# The `ltree` extension is created by the test bootstrap, so no init SQL here.
+services:
+  pg16:
+    image: postgres:16-alpine
+    environment: { POSTGRES_PASSWORD: secret, POSTGRES_DB: ltree_test }
+    ports: ["55416:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ltree_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+  pg17:
+    image: postgres:17-alpine
+    environment: { POSTGRES_PASSWORD: secret, POSTGRES_DB: ltree_test }
+    ports: ["55417:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ltree_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+  pg18:
+    image: postgres:18-alpine
+    environment: { POSTGRES_PASSWORD: secret, POSTGRES_DB: ltree_test }
+    ports: ["55418:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ltree_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15

@@ -1,0 +1,33 @@
+<?php
+
+use Happenv\Ltree\Database\Schema\LtreeExtension;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        LtreeExtension::create();
+
+        Schema::create('categories', function (Blueprint $table) {
+            $table->id();
+            // ON DELETE RESTRICT keeps app-level cascadeDelete() authoritative (see package design).
+            $table->foreignId('parent_id')->nullable()->constrained('categories')->restrictOnDelete();
+            // Nullable because this table uses an auto-increment id as the ltree label:
+            // the observer inserts with a null path and backfills it once the id is
+            // assigned (the "deferral"). A UUID/ULID/slug label may keep path NOT NULL.
+            $table->ltree('path')->nullable();
+            $table->ltreeDepth('depth', 'path');
+            $table->timestamps();
+
+            $table->gist('path');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('categories');
+    }
+};

@@ -1,0 +1,52 @@
+{
+    "name": "happenv-com/laravel-ltree",
+    "description": "The reference-quality Laravel integration for PostgreSQL ltree, lquery and ltxtquery.",
+    "keywords": ["laravel", "postgresql", "ltree", "lquery", "ltxtquery", "tree", "hierarchy", "eloquent"],
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "illuminate/database": "^12.0|^13.0",
+        "illuminate/support": "^12.0|^13.0"
+    },
+    "require-dev": {
+        "driftingly/rector-laravel": "^2.0",
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.18",
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^4.0",
+        "rector/rector": "^2.0"
+    },
+    "autoload": {
+        "psr-4": { "Happenv\\Ltree\\": "src/" }
+    },
+    "autoload-dev": {
+        "psr-4": { "Happenv\\Ltree\\Tests\\": "tests/" }
+    },
+    "extra": {
+        "laravel": {
+            "providers": ["Happenv\\Ltree\\LaravelLtreeServiceProvider"]
+        },
+        "branch-alias": {
+            "dev-main": "1.x-dev"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "analyse": "phpstan analyse",
+        "lint": "pint --test",
+        "fix": "pint",
+        "rector": "rector process --dry-run",
+        "rector:fix": "rector process",
+        "mutate": "@php -d pcov.enabled=1 -d xdebug.mode=off vendor/bin/pest --mutate",
+        "prefer-lowest": "composer update --prefer-lowest",
+        "check": ["@lint", "@analyse", "@test"]
+    }
+}

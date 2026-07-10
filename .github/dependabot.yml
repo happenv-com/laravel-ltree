@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Keep the SHA-pinned GitHub Actions up to date (paired with the zizmor
+  # workflow, which enforces the pinning).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
