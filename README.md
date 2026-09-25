@@ -596,4 +596,4 @@ All live in `Happenv\Ltree\Events`.
 
 ## License
 
-The MIT License (MIT). See [LICENSE](LICENSE).
+The MIT License (MIT). See [LICENSE](LICENSE.md).
