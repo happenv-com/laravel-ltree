@@ -61,6 +61,7 @@ $laptop->moveTo($peripherals);                       // transactional subtree mo
 - [Events](#events)
 - [FAQ](#faq)
 - [Quality](#quality)
+- [AI assistants (Laravel Boost)](#ai-assistants-laravel-boost)
 - [License](#license)
 
 ---
@@ -593,6 +594,10 @@ All live in `Happenv\Ltree\Events`.
 - **Pest-native mutation testing** with a required covered-mutation score of **100**.
 - **Laravel Pint** for formatting.
 - The full test suite runs against **PostgreSQL 16, 17, and 18** and **Laravel 12 and 13** in CI.
+
+## AI assistants (Laravel Boost)
+
+The package ships a [Laravel Boost](https://laravel.com/docs/boost) skill, `laravel-ltree-development`, in `resources/boost/skills/`. `php artisan boost:install` (or `boost:update`) offers it to your coding agent: migrations, the model hooks, relations and query builder, tree operations and their events, testing helpers, and the things that bite (a plain `parent_id` update does not move a node, `cascadeDelete()` bypasses model events).
 
 ## License
 
