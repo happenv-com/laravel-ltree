@@ -47,13 +47,14 @@ Schema::create('categories', function (Blueprint $table) {
     $table->string('name');
     $table->foreignId('parent_id')->nullable()->constrained('categories')->restrictOnDelete();
     $table->ltree('path')->nullable();   // nullable: an auto-increment label is only known after INSERT
-    $table->ltreeDepth();                // integer GENERATED ALWAYS AS (nlevel("path")) STORED
+    $table->ltreeDepth()->nullable();    // integer GENERATED ALWAYS AS (nlevel("path")) STORED
     $table->gist('path');                // the index every ltree operator needs
+    $table->timestamps();
 });
 ```
 
 - Always add `$table->gist('path')` in the same migration. `$table->gin('path')` throws `UnsupportedIndexException` (GIN is for `ltree[]` only).
-- `ltreeDepth($column = 'depth', $from = 'path')`. Other macros: `lquery('col')`, `ltxtquery('col')`.
+- `ltreeDepth($column = 'depth', $from = 'path')` is `NOT NULL` unless you chain `->nullable()`. With a nullable path (auto-increment labels) it must be nullable too, or the first `INSERT` (path still `NULL`) fails. Other macros: `lquery('col')`, `ltxtquery('col')`.
 - A UUID/ULID or slug label is known during `creating`, so `path` may be `NOT NULL` there.
 
 ## Model
@@ -64,10 +65,12 @@ use Happenv\Ltree\Concerns\HasLtree;
 class Category extends Model
 {
     use HasLtree;
+
+    protected $fillable = ['name', 'parent_id'];
 }
 ```
 
-`HasLtree` registers the `LtreeCast` on the path column, swaps the builder for `LtreeBuilder`, the collection for `LtreeCollection`, and computes the path on create from the parent and the model's **label**.
+`HasLtree` does not change mass assignment or timestamps: declare `$fillable` (or `$guarded`) as usual. `HasLtree` registers the `LtreeCast` on the path column, swaps the builder for `LtreeBuilder`, the collection for `LtreeCollection`, and computes the path on create from the parent and the model's **label**.
 
 - Default label: the primary key (normalized: `-` becomes `_`, so a UUID label is `0199..._...`). With an auto-increment key the row is inserted with a `NULL` path and an extra `UPDATE` fills it in `created`.
 - Slug labels: override both hooks.
@@ -121,7 +124,7 @@ Category::whereHas('descendants', fn ($q) => $q->where('name', 'Laptops'))->get(
 // structural (strict: the node itself is excluded)
 ->whereDescendantOf($node)   ->whereAncestorOf($node)   ->whereChildOf($node)
 ->whereParentOf($node)       ->whereSiblingOf($node)    ->whereRoot()   ->whereLeaf()
-->whereDescendantOfAny([$a, $b])   ->whereAncestorOfAny([$a, $b])   // empty list matches nothing
+->whereDescendantOfAny([$a, $b])   ->whereAncestorOfAny([$a, $b])   // INCLUSIVE: the given nodes match too; empty list matches nothing
 // depth
 ->whereDepth(3)  ->whereBetweenDepth(2, 4)  ->minDepth(2)  ->maxDepth(3)
 ->whereWithinDepthOf($node, 2)   // node itself + up to 2 levels below
@@ -151,7 +154,7 @@ lquery and ltxtquery are case-sensitive; append `@` to a label for case-insensit
 
 ## Tree operations
 
-Each runs in a transaction (`ltree.transactional_moves`), dispatches a cancellable before-event and an after-event (`Happenv\Ltree\Events`), and rewrites paths in one SQL statement.
+`moveTo`, `renameSegment` and `cascadeDelete` rewrite (or delete) the whole subtree in one SQL statement; `copyTo` saves each copied node individually and `rebuildPaths` updates row by row. Those five run in a transaction (`ltree.transactional_moves`) and dispatch a cancellable before-event and an after-event (`Happenv\Ltree\Events`, table below). `appendChild`/`prependChild` dispatch no tree events and only open a transaction when an order column is configured; the ordered moves dispatch events only through the `moveTo()` they call when reparenting.
 
 ```php
 $node->moveTo($newParent);     // whole subtree; also updates parent_id. moveTo(null) == detach()
@@ -220,16 +223,18 @@ $nodes = TreeBuilder::fromArray(Category::class, [     // flat LtreeCollection, 
 `fromArray()` fills attributes unguarded. For factories, add `Happenv\Ltree\Testing\HasLtreeFactory` to the factory:
 
 ```php
-Category::factory()->createTree([['children' => [[], []]]]);   // standalone tree
-Category::factory()->hasTree([['children' => [[]]]])->create(); // subtree under each created parent
+Category::factory()->createTree([['children' => [[], []]]]);   // standalone tree; every node gets the factory definition
+Category::factory()->hasTree([                                   // subtree under each created parent
+    ['name' => 'Laptops', 'children' => [['name' => 'Gaming']]],
+])->create();
 ```
 
-Do not use Laravel's `has()`/`for()` to build ltree children: the parent's path must exist before the child is created.
+`hasTree()` builds the subtree with `TreeBuilder::fromArray()`, not the factory, so the descendants get **only** the attributes you list: supply every required column. Prefer `hasTree()` / `createTree()` over chaining Laravel's `has()` for nested trees: each node is saved after its parent, so its path can be computed.
 
 ## Artisan
 
 ```bash
-php artisan ltree:check "App\Models\Category"    # extension, GiST index, NULL/orphaned paths, dangling parent_id, path vs parent_id; non-zero exit on problems
+php artisan ltree:check "App\Models\Category"    # extension, NULL/orphaned paths, dangling parent_id, path vs parent_id fail (non-zero exit); a missing GiST index only warns
 php artisan ltree:rebuild "App\Models\Category"  # rebuildPaths()
 php artisan ltree:optimize "App\Models\Category" # create the GiST index if missing, REINDEX, ANALYZE
 ```
